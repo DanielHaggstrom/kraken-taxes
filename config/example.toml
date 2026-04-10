@@ -1,0 +1,18 @@
+[inputs]
+ledger_dir = "C:/ruta/a/tus/movimientos"
+ledger_glob = "*.csv"
+
+[project]
+target_currency = "EUR"
+source_timezone = "UTC"
+output_timezone = "Europe/Madrid"
+
+[pricing]
+provider = "kraken"
+price_cache_path = ".cache/kraken_price_cache.json"
+initial_trade_window_seconds = 300
+max_trade_window_seconds = 86400
+route_max_hops = 2
+preferred_intermediates = ["EUR", "USD", "USDT", "USDC", "BTC", "ETH"]
+http_timeout_seconds = 20
+
