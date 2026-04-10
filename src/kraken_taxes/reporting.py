@@ -1,16 +1,20 @@
 from __future__ import annotations
 
 import csv
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 from pathlib import Path
 
 from .config import AppConfig
-from .models import LedgerEntry, RewardValuation
+from .models import (
+    AssetRewardSummary,
+    LedgerEntry,
+    MonthlyRewardSummary,
+    RewardReportSummary,
+    RewardValuation,
+)
 from .pricing import KrakenPriceProvider
+from .tax import apply_tax_estimates, quantize_money, quantize_rate, resolve_tax_profile
 from .timezones import resolve_timezone
-
-
-MONEY_QUANTIZER = Decimal("0.01")
 
 
 def build_reward_report(
@@ -44,11 +48,8 @@ def build_reward_report(
             )
         )
 
-    return report
-
-
-def quantize_money(value: Decimal) -> Decimal:
-    return value.quantize(MONEY_QUANTIZER, rounding=ROUND_HALF_UP)
+    profile = resolve_tax_profile(config.tax)
+    return apply_tax_estimates(report, profile)
 
 
 def aggregate_reward_totals(rewards: list[RewardValuation]) -> dict[str, dict[str, Decimal | int]]:
@@ -58,16 +59,116 @@ def aggregate_reward_totals(rewards: list[RewardValuation]) -> dict[str, dict[st
             reward.entry.asset_normalized,
             {
                 "count": 0,
-                "gross": Decimal("0"),
-                "fee": Decimal("0"),
-                "net": Decimal("0"),
+                "gross_amount": Decimal("0"),
+                "fee_amount": Decimal("0"),
+                "net_amount": Decimal("0"),
+                "gross_value": Decimal("0"),
+                "fee_value": Decimal("0"),
+                "net_value": Decimal("0"),
+                "taxable_value": Decimal("0"),
+                "estimated_tax": Decimal("0"),
             },
         )
         bucket["count"] = int(bucket["count"]) + 1
-        bucket["gross"] = Decimal(bucket["gross"]) + reward.gross_value
-        bucket["fee"] = Decimal(bucket["fee"]) + reward.fee_value
-        bucket["net"] = Decimal(bucket["net"]) + reward.net_value
+        bucket["gross_amount"] = Decimal(bucket["gross_amount"]) + reward.entry.amount
+        bucket["fee_amount"] = Decimal(bucket["fee_amount"]) + reward.entry.fee
+        bucket["net_amount"] = Decimal(bucket["net_amount"]) + reward.entry.net_amount
+        bucket["gross_value"] = Decimal(bucket["gross_value"]) + reward.gross_value
+        bucket["fee_value"] = Decimal(bucket["fee_value"]) + reward.fee_value
+        bucket["net_value"] = Decimal(bucket["net_value"]) + reward.net_value
+        bucket["taxable_value"] = Decimal(bucket["taxable_value"]) + reward.taxable_value
+        bucket["estimated_tax"] = Decimal(bucket["estimated_tax"]) + reward.estimated_tax
     return totals
+
+
+def build_reward_report_summary(
+    rewards: list[RewardValuation],
+    config: AppConfig,
+) -> RewardReportSummary:
+    profile = resolve_tax_profile(config.tax)
+    asset_totals = aggregate_reward_totals(rewards)
+    asset_summaries = tuple(
+        AssetRewardSummary(
+            asset=asset,
+            event_count=int(bucket["count"]),
+            gross_amount=Decimal(bucket["gross_amount"]),
+            fee_amount=Decimal(bucket["fee_amount"]),
+            net_amount=Decimal(bucket["net_amount"]),
+            gross_value=Decimal(bucket["gross_value"]),
+            fee_value=Decimal(bucket["fee_value"]),
+            net_value=Decimal(bucket["net_value"]),
+            taxable_value=Decimal(bucket["taxable_value"]),
+            estimated_tax=Decimal(bucket["estimated_tax"]),
+        )
+        for asset, bucket in sorted(asset_totals.items())
+    )
+    monthly_summaries = build_monthly_summaries(rewards, config)
+    gross_value = sum((reward.gross_value for reward in rewards), start=Decimal("0"))
+    fee_value = sum((reward.fee_value for reward in rewards), start=Decimal("0"))
+    net_value = sum((reward.net_value for reward in rewards), start=Decimal("0"))
+    taxable_value = sum((reward.taxable_value for reward in rewards), start=Decimal("0"))
+    estimated_tax = sum((reward.estimated_tax for reward in rewards), start=Decimal("0"))
+    effective_tax_rate = (
+        quantize_rate(estimated_tax / taxable_value) if taxable_value else Decimal("0")
+    )
+
+    return RewardReportSummary(
+        target_currency=config.target_currency,
+        tax_profile=profile.name,
+        taxable_basis=profile.taxable_basis,
+        event_count=len(rewards),
+        starting_taxable_base=profile.starting_taxable_base,
+        gross_value=quantize_money(gross_value),
+        fee_value=quantize_money(fee_value),
+        net_value=quantize_money(net_value),
+        taxable_value=quantize_money(taxable_value),
+        estimated_tax=quantize_money(estimated_tax),
+        effective_tax_rate=effective_tax_rate,
+        asset_summaries=asset_summaries,
+        monthly_summaries=monthly_summaries,
+        tax_profile_display_name=profile.display_name,
+        tax_profile_kind=profile.kind,
+        tax_profile_notes=profile.notes,
+        tax_profile_references=profile.references,
+    )
+
+
+def build_monthly_summaries(
+    rewards: list[RewardValuation],
+    config: AppConfig,
+) -> tuple[MonthlyRewardSummary, ...]:
+    output_tz = resolve_timezone(config.output_timezone)
+    buckets: dict[str, dict[str, Decimal | int]] = {}
+
+    for reward in rewards:
+        month = reward.entry.time.astimezone(output_tz).strftime("%Y-%m")
+        bucket = buckets.setdefault(
+            month,
+            {
+                "count": 0,
+                "gross_value": Decimal("0"),
+                "net_value": Decimal("0"),
+                "taxable_value": Decimal("0"),
+                "estimated_tax": Decimal("0"),
+            },
+        )
+        bucket["count"] = int(bucket["count"]) + 1
+        bucket["gross_value"] = Decimal(bucket["gross_value"]) + reward.gross_value
+        bucket["net_value"] = Decimal(bucket["net_value"]) + reward.net_value
+        bucket["taxable_value"] = Decimal(bucket["taxable_value"]) + reward.taxable_value
+        bucket["estimated_tax"] = Decimal(bucket["estimated_tax"]) + reward.estimated_tax
+
+    return tuple(
+        MonthlyRewardSummary(
+            month=month,
+            event_count=int(bucket["count"]),
+            gross_value=quantize_money(Decimal(bucket["gross_value"])),
+            net_value=quantize_money(Decimal(bucket["net_value"])),
+            taxable_value=quantize_money(Decimal(bucket["taxable_value"])),
+            estimated_tax=quantize_money(Decimal(bucket["estimated_tax"])),
+        )
+        for month, bucket in sorted(buckets.items())
+    )
 
 
 def export_rewards_csv(
@@ -93,6 +194,12 @@ def export_rewards_csv(
                 "gross_value",
                 "fee_value",
                 "net_value",
+                "taxable_value",
+                "estimated_tax",
+                "estimated_tax_rate",
+                "cumulative_taxable_base",
+                "tax_profile",
+                "taxable_basis",
                 "route",
                 "trade_times_utc",
                 "txid",
@@ -117,6 +224,12 @@ def export_rewards_csv(
                     "gross_value": str(reward.gross_value),
                     "fee_value": str(reward.fee_value),
                     "net_value": str(reward.net_value),
+                    "taxable_value": str(reward.taxable_value),
+                    "estimated_tax": str(reward.estimated_tax),
+                    "estimated_tax_rate": str(reward.estimated_tax_rate),
+                    "cumulative_taxable_base": str(reward.cumulative_taxable_base),
+                    "tax_profile": reward.tax_profile,
+                    "taxable_basis": reward.taxable_basis,
                     "route": reward.quote.route,
                     "trade_times_utc": " | ".join(
                         step.trade_time.astimezone(utc).isoformat()

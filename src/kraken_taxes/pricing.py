@@ -3,14 +3,14 @@ from __future__ import annotations
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import UTC, datetime
-import json
 from decimal import Decimal
+import json
 from pathlib import Path
 
 from .config import AppConfig
 from .kraken import KrakenPublicClient
 from .ledger import normalize_asset_code
-from .models import AssetPair, ConversionStep, PriceQuote, Trade
+from .models import AssetPair, ConversionStep, PriceCacheStats, PriceQuote, Trade
 
 
 class PricingError(RuntimeError):
@@ -34,6 +34,9 @@ class KrakenPriceProvider:
         self._graph = self._build_graph(client.get_asset_pairs())
         self._cache = self._load_cache(config.price_cache_path)
         self._cache_dirty = False
+        self._entries_loaded = len(self._cache)
+        self._cache_hits = 0
+        self._cache_misses = 0
 
     def get_quote(self, from_asset: str, to_asset: str, at_time: datetime) -> PriceQuote:
         source = normalize_asset_code(from_asset)
@@ -97,6 +100,13 @@ class KrakenPriceProvider:
         )
         self._cache_dirty = False
 
+    def get_cache_stats(self) -> PriceCacheStats:
+        return PriceCacheStats(
+            entries_loaded=self._entries_loaded,
+            cache_hits=self._cache_hits,
+            cache_misses=self._cache_misses,
+        )
+
     def _find_route(self, source: str, target: str) -> tuple[PairDirection, ...]:
         queue: deque[tuple[str, tuple[PairDirection, ...]]] = deque([(source, ())])
         visited = {source}
@@ -119,7 +129,7 @@ class KrakenPriceProvider:
                 visited.add(edge.to_asset)
                 queue.append((edge.to_asset, next_path))
 
-        raise PricingError(f"No se encontró ruta de conversión en Kraken: {source} -> {target}")
+        raise PricingError(f"No Kraken conversion route found: {source} -> {target}")
 
     def _edge_priority(self, edge: PairDirection, target: str) -> tuple[int, int, str]:
         if edge.to_asset == target:
@@ -132,8 +142,10 @@ class KrakenPriceProvider:
         key = f"{pair}|{int(at_time.timestamp())}"
         cached = self._cache.get(key)
         if cached:
+            self._cache_hits += 1
             return Decimal(cached["price"]), datetime.fromisoformat(cached["trade_time"])
 
+        self._cache_misses += 1
         best_trade: Trade | None = None
         best_delta: float | None = None
         event_seconds = at_time.timestamp()
@@ -154,7 +166,7 @@ class KrakenPriceProvider:
 
         if best_trade is None or best_delta is None or best_delta > self.config.max_trade_window_seconds:
             raise PricingError(
-                f"No se encontró trade suficientemente cercano para {pair} en {at_time.isoformat()}."
+                f"No sufficiently close Kraken trade found for {pair} at {at_time.isoformat()}."
             )
 
         trade_time = datetime.fromtimestamp(best_trade.timestamp, tz=UTC)
@@ -205,4 +217,3 @@ def _pick_closest_trade(trades: tuple[Trade, ...], event_seconds: float) -> Trad
     if not trades:
         return None
     return min(trades, key=lambda trade: abs(trade.timestamp - event_seconds))
-

@@ -93,4 +93,61 @@ class RewardValuation:
     gross_value: Decimal
     fee_value: Decimal
     net_value: Decimal
+    taxable_value: Decimal = Decimal("0")
+    estimated_tax: Decimal = Decimal("0")
+    estimated_tax_rate: Decimal = Decimal("0")
+    cumulative_taxable_base: Decimal = Decimal("0")
+    tax_profile: str = "none"
+    taxable_basis: str = "gross_value"
 
+
+@dataclass(frozen=True, slots=True)
+class PriceCacheStats:
+    entries_loaded: int
+    cache_hits: int
+    cache_misses: int
+
+
+@dataclass(frozen=True, slots=True)
+class AssetRewardSummary:
+    asset: str
+    event_count: int
+    gross_amount: Decimal
+    fee_amount: Decimal
+    net_amount: Decimal
+    gross_value: Decimal
+    fee_value: Decimal
+    net_value: Decimal
+    taxable_value: Decimal
+    estimated_tax: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class MonthlyRewardSummary:
+    month: str
+    event_count: int
+    gross_value: Decimal
+    net_value: Decimal
+    taxable_value: Decimal
+    estimated_tax: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class RewardReportSummary:
+    target_currency: str
+    tax_profile: str
+    taxable_basis: str
+    event_count: int
+    starting_taxable_base: Decimal
+    gross_value: Decimal
+    fee_value: Decimal
+    net_value: Decimal
+    taxable_value: Decimal
+    estimated_tax: Decimal
+    effective_tax_rate: Decimal
+    asset_summaries: tuple[AssetRewardSummary, ...]
+    monthly_summaries: tuple[MonthlyRewardSummary, ...]
+    tax_profile_display_name: str
+    tax_profile_kind: str
+    tax_profile_notes: str
+    tax_profile_references: tuple[str, ...]

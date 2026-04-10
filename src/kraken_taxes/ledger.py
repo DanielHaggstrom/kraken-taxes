@@ -6,6 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
+
 from .config import AppConfig
 from .models import LedgerEntry, LedgerLoadStats
 from .timezones import resolve_timezone
@@ -54,7 +55,7 @@ def normalize_asset_code(raw: str) -> str:
 
 def discover_ledger_files(config: AppConfig) -> list[Path]:
     if not config.ledger_dir.exists():
-        raise FileNotFoundError(f"No existe la carpeta de ledgers: {config.ledger_dir}")
+        raise FileNotFoundError(f"Ledger directory does not exist: {config.ledger_dir}")
     return sorted(path for path in config.ledger_dir.glob(config.ledger_glob) if path.is_file())
 
 
@@ -63,7 +64,7 @@ def load_ledgers(config: AppConfig) -> tuple[list[LedgerEntry], LedgerLoadStats]
     files = discover_ledger_files(config)
     if not files:
         raise FileNotFoundError(
-            f"No se encontraron CSV en {config.ledger_dir} con el patrón {config.ledger_glob!r}."
+            f"No CSV files were found in {config.ledger_dir} matching {config.ledger_glob!r}."
         )
 
     source_rows = 0

@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from kraken_taxes.config import AppConfig
+from kraken_taxes.config import AppConfig, TaxConfig
 from kraken_taxes.ledger import load_ledgers, normalize_asset_code
 
 
@@ -23,6 +23,7 @@ def make_config(ledger_dir: Path) -> AppConfig:
         route_max_hops=2,
         preferred_intermediates=("EUR", "USD"),
         http_timeout_seconds=20,
+        tax=TaxConfig(profile="none"),
     )
 
 
@@ -63,4 +64,3 @@ class LedgerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

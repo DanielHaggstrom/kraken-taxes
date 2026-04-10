@@ -1,45 +1,63 @@
 # Kraken Taxes
 
-`kraken-taxes` consolidates Kraken ledger CSV exports and estimates the taxable value of reward events in a target currency using historical market data from Kraken.
+`kraken-taxes` consolidates Kraken ledger CSV exports and estimates the value and tax impact of reward events using historical Kraken market data.
 
-The current implementation is especially useful for `earn/reward` flows such as ETH staking rewards, while preserving the full ledger history for traceability and later analysis.
+It is built for people who want a reproducible, inspectable workflow for reward-based crypto income, especially Kraken `earn/reward` entries such as staking rewards.
 
-## Features
+## What It Does
 
-- Load multiple Kraken ledger CSV exports from a directory
-- Merge overlapping exports and deduplicate repeated rows
-- Normalize asset codes such as `XXBT` -> `BTC` and `EUR.HOLD` -> `EUR`
-- Keep source-level traceability with original file name and line number
-- Value each `earn/reward` event at the event timestamp in a configurable target currency
-- Use Kraken public market data to resolve direct and multi-hop conversion routes
-- Cache historical price lookups locally to reduce repeated API calls
-- Export both a merged ledger and a reward valuation report
+- loads multiple Kraken ledger CSV exports from a directory
+- merges overlapping exports and deduplicates repeated rows
+- normalizes Kraken asset codes such as `XXBT` -> `BTC` and `EUR.HOLD` -> `EUR`
+- values each `earn/reward` event at the event timestamp in a configurable target currency
+- resolves direct and multi-hop conversion routes using Kraken public markets
+- caches historical quote lookups locally to reduce repeated API calls
+- estimates taxes with configurable tax profiles
+- exports both machine-friendly CSV and human-friendly HTML reports
 
 ## Current Scope
 
-This project currently focuses on:
+Today the project focuses on reward-income workflows:
 
-- importing Kraken ledger exports
-- identifying `earn/reward` entries
-- valuing those rewards in a target fiat or crypto currency available through Kraken markets
+- import Kraken ledger exports
+- identify `earn/reward` entries
+- estimate value at receipt
+- estimate tax using a configurable profile
 
-Other ledger event types such as transfers, allocations, or internal wallet movements are preserved in the merged ledger, but are not yet interpreted as taxable events by the reporting command.
+Other ledger events such as transfers, allocations, or wallet movements are preserved in the merged ledger for traceability, but are not yet treated as full tax-lot events.
 
-## How Pricing Works
+## Pricing Model
 
-Price discovery is based on Kraken public endpoints:
+Historical pricing uses Kraken public endpoints:
 
-- `AssetPairs` is used to discover available trading pairs
-- `Trades` is used to locate historical trades near the event timestamp
+- `AssetPairs` to discover available conversion routes
+- `Trades` to find market trades near the reward timestamp
 
-For each reward event, the tool:
+For each reward event the tool:
 
-1. finds a conversion route from the reward asset to the target currency
+1. finds a route from the reward asset to the target currency
 2. queries historical Kraken trades near the event timestamp for each route step
-3. uses the closest trade price to estimate the event value
-4. computes gross, fee, and net values in the target currency
+3. uses the closest trade price for each step
+4. computes gross, fee, and net value in the target currency
 
-This keeps pricing aligned with Kraken market data instead of relying on daily candles or third-party aggregators.
+This keeps valuation tied to Kraken market data rather than daily candles or third-party aggregators.
+
+## Tax Estimation
+
+Tax estimation is configurable. The project currently ships with:
+
+- `none`
+- `flat`
+- `progressive`
+- `spain_irpf_savings_2025`
+
+The built-in Spain profile is intended for reward income treated as part of the IRPF savings base. See [docs/tax-profiles.md](docs/tax-profiles.md) for details and official references.
+
+Important:
+
+- tax estimation is a planning and recordkeeping aid, not tax advice
+- the correct treatment depends on jurisdiction, tax year, and facts not always present in a ledger export
+- progressive estimates can be materially wrong if you do not configure the starting taxable base for the period
 
 ## Installation
 
@@ -73,7 +91,22 @@ max_trade_window_seconds = 86400
 route_max_hops = 2
 preferred_intermediates = ["EUR", "USD", "USDT", "USDC", "BTC", "ETH"]
 http_timeout_seconds = 20
+
+[tax]
+profile = "spain_irpf_savings_2025"
+starting_taxable_base = "0"
 ```
+
+### Key Tax Settings
+
+- `profile`
+  Selects the tax model to use.
+
+- `starting_taxable_base`
+  Lets you account for other income already occupying part of the same tax brackets for the selected period.
+
+- `taxable_basis`
+  Available for custom `flat` or `progressive` profiles. Supported values are `gross_value`, `net_value`, and `fee_value`.
 
 ## Commands
 
@@ -89,29 +122,41 @@ Export a merged, deduplicated ledger:
 python -m kraken_taxes merge --output exports/merged-ledger.csv
 ```
 
-Value reward events for a specific asset and year:
+Value reward events and print a console summary:
 
 ```powershell
 python -m kraken_taxes rewards --asset ETH --year 2025 --output reports/eth-rewards-2025.csv
 ```
 
-Value all detected reward events:
+Generate a complete CSV + HTML report:
 
 ```powershell
-python -m kraken_taxes rewards --output reports/all-rewards.csv
+python -m kraken_taxes report --asset ETH --year 2025 --csv-output reports/eth-2025.csv --html-output reports/eth-2025.html
 ```
 
-## Report Output
+## CSV Output
 
-The reward report includes:
+The detailed reward CSV includes:
 
 - event timestamps in UTC and local output timezone
-- original asset amounts: gross, fee, and net
-- resolved conversion route
+- gross, fee, and net amounts in the original asset
 - effective exchange rate into the target currency
 - gross, fee, and net values in the target currency
-- trade timestamps used for valuation
+- taxable value and estimated tax
+- cumulative taxable base used by the estimator
+- conversion route and trade timestamps used for valuation
 - original `txid`, `refid`, wallet, source file, and source line
+
+## HTML Report
+
+The HTML report is intended for review and recordkeeping. It includes:
+
+- headline totals
+- selected tax profile and assumptions
+- cache and runtime context
+- summary by asset
+- monthly progression
+- detailed reward-event table
 
 ## Development
 
@@ -123,14 +168,15 @@ python -m unittest discover -s tests -v
 
 ## Limitations
 
-- This project is a technical aid for recordkeeping and estimation, not tax or legal advice.
+- This project does not replace professional tax or legal advice.
 - Valuation quality depends on Kraken having sufficiently close market trades for the relevant pair.
-- If no route exists from an asset to the target currency within the configured hop limit, the valuation command will fail explicitly.
-- Historical valuation currently centers on `earn/reward` entries rather than a full tax-lot engine for all ledger activity.
+- If no route exists from an asset to the target currency within the configured hop limit, valuation fails explicitly.
+- The current tax layer focuses on reward-income estimation, not a full disposal / tax-lot engine.
 
-## Roadmap Ideas
+## Roadmap
 
-- richer handling of staking-related flows beyond reward valuation
-- configurable tax-event classification rules
-- support for additional market data providers
-- yearly summaries and country-specific reporting layers
+- broader treatment of staking-related flows beyond reward receipt
+- disposal tracking and tax-lot support
+- additional market-data providers
+- more built-in jurisdiction profiles
+- richer yearly summaries and export formats

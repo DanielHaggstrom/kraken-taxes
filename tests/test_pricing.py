@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from kraken_taxes.config import AppConfig
+from kraken_taxes.config import AppConfig, TaxConfig
 from kraken_taxes.models import AssetPair, Trade
 from kraken_taxes.pricing import KrakenPriceProvider
 
@@ -26,6 +26,7 @@ def make_config(base_dir: Path) -> AppConfig:
         route_max_hops=2,
         preferred_intermediates=("EUR", "USD"),
         http_timeout_seconds=20,
+        tax=TaxConfig(profile="none"),
     )
 
 
@@ -80,4 +81,3 @@ class PricingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

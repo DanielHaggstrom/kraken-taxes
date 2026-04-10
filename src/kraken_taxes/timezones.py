@@ -11,6 +11,6 @@ def resolve_timezone(name: str) -> tzinfo:
         return ZoneInfo(name)
     except ZoneInfoNotFoundError as exc:
         raise ValueError(
-            f"No se pudo cargar la zona horaria {name!r}. "
-            "Instala la dependencia `tzdata` o corrige el valor en la configuración."
+            f"Could not load timezone {name!r}. "
+            "Install the `tzdata` dependency or correct the configuration value."
         ) from exc

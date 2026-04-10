@@ -89,7 +89,7 @@ class KrakenPublicClient:
                 raise KrakenApiError("; ".join(errors))
             return payload["result"]
 
-        raise KrakenApiError("No se pudo completar la petición a Kraken.")
+        raise KrakenApiError("Could not complete the request to Kraken.")
 
     def _respect_rate_limit(self) -> None:
         now = time.monotonic()

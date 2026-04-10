@@ -16,3 +16,24 @@ route_max_hops = 2
 preferred_intermediates = ["EUR", "USD", "USDT", "USDC", "BTC", "ETH"]
 http_timeout_seconds = 20
 
+[tax]
+profile = "spain_irpf_savings_2025"
+starting_taxable_base = "0"
+
+# Optional custom profile examples:
+#
+# profile = "flat"
+# taxable_basis = "gross_value"
+# flat_rate = "0.24"
+#
+# profile = "progressive"
+# taxable_basis = "gross_value"
+# [[tax.brackets]]
+# up_to = "6000"
+# rate = "0.19"
+# [[tax.brackets]]
+# up_to = "50000"
+# rate = "0.21"
+# [[tax.brackets]]
+# up_to = null
+# rate = "0.23"

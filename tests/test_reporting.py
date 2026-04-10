@@ -5,9 +5,9 @@ from decimal import Decimal
 from pathlib import Path
 import unittest
 
-from kraken_taxes.config import AppConfig
+from kraken_taxes.config import AppConfig, TaxConfig
 from kraken_taxes.models import LedgerEntry, PriceQuote
-from kraken_taxes.reporting import aggregate_reward_totals, build_reward_report
+from kraken_taxes.reporting import aggregate_reward_totals, build_reward_report, build_reward_report_summary
 
 
 def make_config() -> AppConfig:
@@ -26,6 +26,11 @@ def make_config() -> AppConfig:
         route_max_hops=2,
         preferred_intermediates=("EUR", "USD"),
         http_timeout_seconds=20,
+        tax=TaxConfig(
+            profile="flat",
+            taxable_basis="gross_value",
+            flat_rate=Decimal("0.20"),
+        ),
     )
 
 
@@ -41,7 +46,7 @@ class FakeProvider:
 
 
 class ReportingTests(unittest.TestCase):
-    def test_reward_report_values_gross_fee_and_net(self) -> None:
+    def test_reward_report_values_and_flat_tax_estimate(self) -> None:
         reward = LedgerEntry(
             txid="TX-001",
             refid="REF-001",
@@ -83,13 +88,21 @@ class ReportingTests(unittest.TestCase):
         self.assertEqual(report[0].gross_value, Decimal("200.00"))
         self.assertEqual(report[0].fee_value, Decimal("50.00"))
         self.assertEqual(report[0].net_value, Decimal("150.00"))
+        self.assertEqual(report[0].taxable_value, Decimal("200.00"))
+        self.assertEqual(report[0].estimated_tax, Decimal("40.00"))
 
         totals = aggregate_reward_totals(report)
         self.assertEqual(totals["ETH"]["count"], 1)
-        self.assertEqual(totals["ETH"]["gross"], Decimal("200.00"))
-        self.assertEqual(totals["ETH"]["fee"], Decimal("50.00"))
-        self.assertEqual(totals["ETH"]["net"], Decimal("150.00"))
+        self.assertEqual(totals["ETH"]["gross_value"], Decimal("200.00"))
+        self.assertEqual(totals["ETH"]["taxable_value"], Decimal("200.00"))
+        self.assertEqual(totals["ETH"]["estimated_tax"], Decimal("40.00"))
+
+        summary = build_reward_report_summary(report, make_config())
+        self.assertEqual(summary.event_count, 1)
+        self.assertEqual(summary.taxable_value, Decimal("200.00"))
+        self.assertEqual(summary.estimated_tax, Decimal("40.00"))
 
 
 if __name__ == "__main__":
     unittest.main()
+
