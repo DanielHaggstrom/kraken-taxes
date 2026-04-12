@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from html import escape
 from pathlib import Path
 
@@ -23,6 +23,7 @@ def export_reward_report_html(
     generated_at = datetime.now(tz=output_tz)
     visible_rewards = rewards[:max(max_event_rows, 0)]
     truncated = len(visible_rewards) < len(rewards)
+    audit_metrics = _build_audit_metrics(rewards)
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -286,6 +287,31 @@ def export_reward_report_html(
     </section>
 
     <section class="panel">
+      <h2>Audit checks</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Metric</th>
+              <th>Exact Sum From Rows</th>
+              <th>Displayed Summary</th>
+              <th>Rounding Delta</th>
+            </tr>
+          </thead>
+          <tbody>
+            {_render_audit_rows(audit_metrics, summary.target_currency)}
+          </tbody>
+        </table>
+      </div>
+      <p class="note">
+        Micro-events below 0.01 {escape(summary.target_currency)}:
+        gross={audit_metrics['micro_gross_count']},
+        taxable={audit_metrics['micro_taxable_count']},
+        tax={audit_metrics['micro_tax_count']}.
+      </p>
+    </section>
+
+    <section class="panel">
       <h2>Reward events</h2>
       <div class="table-wrap">
         <table>
@@ -381,6 +407,62 @@ def _render_event_rows(rewards: list[RewardValuation], output_tz) -> str:
     )
 
 
+def _render_audit_rows(metrics: dict[str, Decimal | int], currency: str) -> str:
+    rows = (
+        ("Gross value", metrics["gross_exact"], metrics["gross_displayed"], metrics["gross_delta"]),
+        (
+            "Taxable value",
+            metrics["taxable_exact"],
+            metrics["taxable_displayed"],
+            metrics["taxable_delta"],
+        ),
+        (
+            "Estimated incremental tax",
+            metrics["tax_exact"],
+            metrics["tax_displayed"],
+            metrics["tax_delta"],
+        ),
+    )
+    return "".join(
+        f"""
+        <tr>
+          <td>{escape(label)}</td>
+          <td class="code">{escape(str(exact_value))}</td>
+          <td>{_fmt_money(displayed_value, currency)}</td>
+          <td>{_fmt_money(delta_value, currency)}</td>
+        </tr>
+        """
+        for label, exact_value, displayed_value, delta_value in rows
+    )
+
+
+def _build_audit_metrics(rewards: list[RewardValuation]) -> dict[str, Decimal | int]:
+    gross_exact = sum((reward.gross_value for reward in rewards), start=Decimal("0"))
+    taxable_exact = sum((reward.taxable_value for reward in rewards), start=Decimal("0"))
+    tax_exact = sum((reward.estimated_tax for reward in rewards), start=Decimal("0"))
+
+    gross_displayed = quantize_for_display(gross_exact)
+    taxable_displayed = quantize_for_display(taxable_exact)
+    tax_displayed = quantize_for_display(tax_exact)
+
+    return {
+        "gross_exact": gross_exact,
+        "gross_displayed": gross_displayed,
+        "gross_delta": gross_displayed - gross_exact,
+        "taxable_exact": taxable_exact,
+        "taxable_displayed": taxable_displayed,
+        "taxable_delta": taxable_displayed - taxable_exact,
+        "tax_exact": tax_exact,
+        "tax_displayed": tax_displayed,
+        "tax_delta": tax_displayed - tax_exact,
+        "micro_gross_count": sum(1 for reward in rewards if Decimal("0") < abs(reward.gross_value) < Decimal("0.01")),
+        "micro_taxable_count": sum(
+            1 for reward in rewards if Decimal("0") < abs(reward.taxable_value) < Decimal("0.01")
+        ),
+        "micro_tax_count": sum(1 for reward in rewards if Decimal("0") < abs(reward.estimated_tax) < Decimal("0.01")),
+    }
+
+
 def _fmt_money(value: Decimal, currency: str) -> str:
     magnitude = abs(value)
     if value == 0:
@@ -392,6 +474,10 @@ def _fmt_money(value: Decimal, currency: str) -> str:
 
 def _fmt_percent(value: Decimal) -> str:
     return f"{(value * Decimal('100')):,.2f}%"
+
+
+def quantize_for_display(value: Decimal) -> Decimal:
+    return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def _display_path(path: Path) -> str:
