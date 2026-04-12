@@ -201,15 +201,16 @@ def _print_reward_summary(summary) -> None:
     )
     print(
         f"Taxable base={summary.taxable_value} "
-        f"estimated_tax={summary.estimated_tax} "
+        f"estimated_incremental_tax={summary.estimated_tax} "
         f"effective_rate={summary.effective_tax_rate}"
     )
     print(f"Starting taxable base={summary.starting_taxable_base}")
+    print("Note: displayed console totals are rounded; CSV/HTML retain higher precision where available.")
     print("By asset:")
     for item in summary.asset_summaries:
         print(
             f"  {item.asset}: events={item.event_count} gross_value={item.gross_value} "
-            f"taxable_value={item.taxable_value} estimated_tax={item.estimated_tax}"
+            f"taxable_value={item.taxable_value} estimated_incremental_tax={item.estimated_tax}"
         )
 
 
@@ -221,7 +222,7 @@ def _print_reward_preview(rewards, config, limit: int) -> None:
     print("\nPreview")
     header = (
         f"{'local_time':25} {'asset':6} {'gross':14} {'gross_value':14} "
-        f"{'taxable':12} {'tax':12} route"
+        f"{'taxable':12} {'inc_tax':12} route"
     )
     print(header)
     print("-" * len(header))

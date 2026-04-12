@@ -39,7 +39,10 @@ def resolve_tax_profile(config: TaxConfig) -> ResolvedTaxProfile:
             starting_taxable_base=config.starting_taxable_base,
             flat_rate=None,
             brackets=(),
-            notes="Tax estimation is disabled. Taxable values are still derived from the selected basis.",
+            notes=(
+                "Tax estimation is disabled. Taxable values are still derived from the "
+                "selected basis, but no tax liability is simulated."
+            ),
             references=(),
         )
 
@@ -54,7 +57,10 @@ def resolve_tax_profile(config: TaxConfig) -> ResolvedTaxProfile:
             starting_taxable_base=config.starting_taxable_base,
             flat_rate=config.flat_rate,
             brackets=(),
-            notes="Applies a single rate to the configured taxable basis.",
+            notes=(
+                "Applies a single rate to the configured taxable basis. "
+                "The reported tax is an incremental estimate only."
+            ),
             references=(),
         )
 
@@ -69,7 +75,10 @@ def resolve_tax_profile(config: TaxConfig) -> ResolvedTaxProfile:
             starting_taxable_base=config.starting_taxable_base,
             flat_rate=None,
             brackets=config.brackets,
-            notes="Applies the configured brackets to the selected taxable basis.",
+            notes=(
+                "Applies the configured brackets to the selected taxable basis. "
+                "The reported tax is an incremental estimate only."
+            ),
             references=(),
         )
 
@@ -89,8 +98,10 @@ def resolve_tax_profile(config: TaxConfig) -> ResolvedTaxProfile:
                 TaxBracketConfig(up_to=None, rate=Decimal("0.30")),
             ),
             notes=(
-                "Designed for reward income treated as savings-base income in Spain. "
-                "For staking rewards, the built-in assumption uses gross market value at receipt."
+                "Assumption: reward income is treated as savings-base income in Spain. "
+                "For staking rewards, the built-in assumption uses gross market value at receipt. "
+                "The reported tax is an incremental estimate only and depends on the configured "
+                "starting taxable base."
             ),
             references=(SPAIN_STAKING_REFERENCE_URL, SPAIN_IRPF_REFERENCE_URL),
         )
@@ -110,10 +121,10 @@ def apply_tax_estimates(
     cumulative_tax = _tax_for_base(cumulative_base, profile)
 
     for reward in rewards:
-        taxable_value = quantize_money(_select_taxable_value(reward, profile.taxable_basis))
+        taxable_value = _select_taxable_value(reward, profile.taxable_basis)
         next_base = cumulative_base + taxable_value
         next_tax = _tax_for_base(next_base, profile)
-        event_tax = quantize_money(next_tax - cumulative_tax)
+        event_tax = next_tax - cumulative_tax
         event_rate = quantize_rate(event_tax / taxable_value) if taxable_value else Decimal("0")
         taxed_rewards.append(
             replace(
@@ -121,7 +132,7 @@ def apply_tax_estimates(
                 taxable_value=taxable_value,
                 estimated_tax=event_tax,
                 estimated_tax_rate=event_rate,
-                cumulative_taxable_base=quantize_money(next_base),
+                cumulative_taxable_base=next_base,
                 tax_profile=profile.name,
                 taxable_basis=profile.taxable_basis,
             )

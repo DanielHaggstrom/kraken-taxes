@@ -29,6 +29,7 @@
   - 23% from 50,000.01 to 200,000 EUR
   - 27% from 200,000.01 to 300,000 EUR
   - 30% above 300,000 EUR
+- reports an incremental estimate based on the configured `starting_taxable_base`
 
 ## Official References
 
@@ -48,5 +49,6 @@ The built-in Spain profile is based on official public sources:
 
 - This project does not provide legal or tax advice.
 - The built-in Spain profile is an estimation layer, not a substitute for a full tax return calculation.
+- The built-in Spain profile assumes savings-base treatment. If you want to model another interpretation, use a custom `progressive` or `flat` profile instead of treating the built-in one as universal truth.
 - The `starting_taxable_base` setting matters for progressive schedules. It lets you account for other income already occupying lower brackets for the same period.
 - Jurisdiction-specific deductions, offsets, wealth tax, VAT, business-activity treatment, and regional edge cases are outside the current scope.

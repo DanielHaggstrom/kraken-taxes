@@ -42,9 +42,9 @@ def build_reward_report(
                 entry=entry,
                 target_currency=config.target_currency,
                 quote=quote,
-                gross_value=quantize_money(entry.amount * quote.rate),
-                fee_value=quantize_money(entry.fee * quote.rate),
-                net_value=quantize_money(entry.net_amount * quote.rate),
+                gross_value=entry.amount * quote.rate,
+                fee_value=entry.fee * quote.rate,
+                net_value=entry.net_amount * quote.rate,
             )
         )
 
@@ -94,11 +94,11 @@ def build_reward_report_summary(
             gross_amount=Decimal(bucket["gross_amount"]),
             fee_amount=Decimal(bucket["fee_amount"]),
             net_amount=Decimal(bucket["net_amount"]),
-            gross_value=Decimal(bucket["gross_value"]),
-            fee_value=Decimal(bucket["fee_value"]),
-            net_value=Decimal(bucket["net_value"]),
-            taxable_value=Decimal(bucket["taxable_value"]),
-            estimated_tax=Decimal(bucket["estimated_tax"]),
+            gross_value=quantize_money(Decimal(bucket["gross_value"])),
+            fee_value=quantize_money(Decimal(bucket["fee_value"])),
+            net_value=quantize_money(Decimal(bucket["net_value"])),
+            taxable_value=quantize_money(Decimal(bucket["taxable_value"])),
+            estimated_tax=quantize_money(Decimal(bucket["estimated_tax"])),
         )
         for asset, bucket in sorted(asset_totals.items())
     )

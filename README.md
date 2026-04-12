@@ -58,6 +58,7 @@ Important:
 - tax estimation is a planning and recordkeeping aid, not tax advice
 - the correct treatment depends on jurisdiction, tax year, and facts not always present in a ledger export
 - progressive estimates can be materially wrong if you do not configure the starting taxable base for the period
+- the built-in Spain profile is an explicit assumption, not a universal classification rule
 
 ## Installation
 
@@ -147,6 +148,8 @@ The detailed reward CSV includes:
 - conversion route and trade timestamps used for valuation
 - original `txid`, `refid`, wallet, source file, and source line
 
+Values in CSV remain at computation precision. HTML and console views round for readability.
+
 ## HTML Report
 
 The HTML report is intended for review and recordkeeping. It includes:
@@ -157,6 +160,8 @@ The HTML report is intended for review and recordkeeping. It includes:
 - summary by asset
 - monthly progression
 - detailed reward-event table
+
+Displayed values are rounded for readability. Small events may therefore appear with more decimals than larger ones.
 
 ## Development
 

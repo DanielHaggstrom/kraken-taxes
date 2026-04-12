@@ -214,7 +214,7 @@ def export_reward_report_html(
         <div class="submetric">Basis: {escape(summary.taxable_basis)}</div>
       </article>
       <article class="card">
-        <div class="label">Estimated Tax</div>
+        <div class="label">Estimated Incremental Tax</div>
         <div class="metric">{_fmt_money(summary.estimated_tax, summary.target_currency)}</div>
         <div class="submetric">Effective rate: {_fmt_percent(summary.effective_tax_rate)}</div>
       </article>
@@ -236,6 +236,9 @@ def export_reward_report_html(
         <div><strong>Cache entries loaded</strong>{cache_stats.entries_loaded}</div>
       </div>
       <p class="note">{escape(summary.tax_profile_notes)}</p>
+      <p class="note">
+        Display values are rounded for readability. CSV exports keep higher precision for audit and reconciliation work.
+      </p>
       {_render_reference_list(summary.tax_profile_references)}
     </section>
 
@@ -272,7 +275,7 @@ def export_reward_report_html(
               <th>Gross Value</th>
               <th>Net Value</th>
               <th>Taxable Value</th>
-              <th>Estimated Tax</th>
+              <th>Estimated Incremental Tax</th>
             </tr>
           </thead>
           <tbody>
@@ -293,7 +296,7 @@ def export_reward_report_html(
               <th>Gross Amount</th>
               <th>Gross Value</th>
               <th>Taxable Value</th>
-              <th>Estimated Tax</th>
+              <th>Estimated Incremental Tax</th>
               <th>Rate</th>
               <th>Route</th>
               <th>Source</th>
@@ -379,6 +382,11 @@ def _render_event_rows(rewards: list[RewardValuation], output_tz) -> str:
 
 
 def _fmt_money(value: Decimal, currency: str) -> str:
+    magnitude = abs(value)
+    if value == 0:
+        return f"0.00 {currency}"
+    if magnitude < Decimal("0.01"):
+        return f"{value:,.6f} {currency}"
     return f"{value:,.2f} {currency}"
 
 
