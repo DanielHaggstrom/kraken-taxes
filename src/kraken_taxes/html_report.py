@@ -143,6 +143,10 @@ def export_reward_report_html(
       border-collapse: collapse;
       font-size: 0.95rem;
     }}
+    .table-wrap {{
+      max-width: 100%;
+      overflow-x: auto;
+    }}
     th, td {{
       padding: 10px 12px;
       border-bottom: 1px solid var(--line);
@@ -158,6 +162,36 @@ def export_reward_report_html(
     td.code {{
       font-family: var(--mono);
       font-size: 0.88rem;
+    }}
+    .table-reward-events {{
+      min-width: 1080px;
+    }}
+    .table-reward-events .route-cell,
+    .table-reward-events .source-cell {{
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }}
+    .route-text {{
+      display: inline-block;
+      line-height: 1.45;
+    }}
+    .route-sep {{
+      color: var(--muted);
+      padding: 0 0.28rem;
+    }}
+    .source-ref {{
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }}
+    .source-name {{
+      display: block;
+      line-height: 1.4;
+    }}
+    .source-line {{
+      color: var(--muted);
+      font-size: 0.78rem;
+      letter-spacing: 0.03em;
     }}
     .note {{
       margin-top: 12px;
@@ -183,7 +217,6 @@ def export_reward_report_html(
       .hero {{ padding: 22px; border-radius: 20px; }}
       .panel, .card {{ border-radius: 16px; }}
       th, td {{ padding: 9px 8px; }}
-      .table-wrap {{ overflow-x: auto; }}
     }}
   </style>
 </head>
@@ -314,7 +347,7 @@ def export_reward_report_html(
     <section class="panel">
       <h2>Reward events</h2>
       <div class="table-wrap">
-        <table>
+        <table class="table-reward-events">
           <thead>
             <tr>
               <th>Local Time</th>
@@ -399,12 +432,32 @@ def _render_event_rows(rewards: list[RewardValuation], output_tz) -> str:
           <td>{_fmt_money(reward.taxable_value, reward.target_currency)}</td>
           <td>{_fmt_money(reward.estimated_tax, reward.target_currency)}</td>
           <td class="code">{escape(str(reward.quote.rate))}</td>
-          <td>{escape(reward.quote.route)}</td>
-          <td class="code">{escape(reward.entry.source_file.name)}:{reward.entry.source_line}</td>
+          <td class="code route-cell">{_render_route_html(reward.quote.route)}</td>
+          <td class="code source-cell" title="{escape(reward.entry.source_file.name)}:{reward.entry.source_line}">
+            <span class="source-ref">
+              <span class="source-name">{_soft_break_html(reward.entry.source_file.name)}</span>
+              <span class="source-line">line {reward.entry.source_line}</span>
+            </span>
+          </td>
         </tr>
         """
         for reward in rewards
     )
+
+
+def _render_route_html(route: str) -> str:
+    parts = route.split(" -> ")
+    if len(parts) <= 1:
+        return _soft_break_html(route)
+    separator = '<wbr><span class="route-sep">-&gt;</span><wbr>'
+    return f'<span class="route-text">{separator.join(_soft_break_html(part) for part in parts)}</span>'
+
+
+def _soft_break_html(text: str) -> str:
+    escaped = escape(text)
+    for separator in ("_", "-", ".", "/", "@"):
+        escaped = escaped.replace(separator, f"{separator}<wbr>")
+    return escaped
 
 
 def _render_audit_rows(metrics: dict[str, Decimal | int], currency: str) -> str:
